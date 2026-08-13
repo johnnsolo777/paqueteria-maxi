@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=1.0">
+    <title>MaxiEntregas · QR con ubicación</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <style>
+        /* ===== ESTILOS (igual que antes) ===== */
+        * { margin:0; padding:0; box-sizing:border-box; font-family: 'Inter', system-ui, sans-serif; }
+        body {
+            background-color: #f1f5f9;
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        :root {
+            --bg-body: #f1f5f9;
+            --bg-card: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --border: #e2e8f0;
+            --table-header: #f8fafc;
+            --hover-row: #f1f5f9;
+            --badge-green-bg: #dcfce7;
+            --badge-green-text: #166534;
+            --badge-gray-bg: #e2e8f0;
+            --badge-gray-text: #334155;
+            --badge-frecuente-bg: #fef08a;
+            --badge-frecuente-text: #854d0e;
+            --btn-primary: #3b82f6;
+            --btn-primary-hover: #2563eb;
+            --modal-bg: rgba(15,23,42,0.6);
+            --shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            --float-btn-bg: #1e293b;
+            --float-btn-color: #fff;
+            --input-bg: #ffffff;
+            --input-border: #e2e8f0;
+        }
+        body.dark {
+            background: linear-gradient(145deg, #0a1628 0%, #162a45 100%);
+            --bg-body: transparent;
+            --bg-card: rgba(30,41,59,0.92);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+            --table-header: rgba(30,41,59,0.9);
+            --hover-row: rgba(45,55,72,0.8);
+            --badge-green-bg: #064e3b;
+            --badge-green-text: #86efac;
+            --badge-gray-bg: #475569;
+            --badge-gray-text: #cbd5e1;
+            --badge-frecuente-bg: #78350f;
+            --badge-frecuente-text: #fcd34d;
+            --shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+            --float-btn-bg: #e2e8f0;
+            --float-btn-color: #0f172a;
+            --input-bg: rgba(15,23,42,0.7);
+            --input-border: #334155;
+        }
+        /* resto de estilos (igual que antes) */
+        .container { max-width: 1400px; margin: 0 auto; position: relative; z-index: 1; }
+        .dashboard-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 25px; }
+        h1 { font-size: 1.8rem; font-weight: 700; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; background-clip: text; color: transparent; display: inline-block; }
+        .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .theme-toggle, .btn-outline { background: var(--bg-card); border: 1px solid var(--border); padding: 8px 16px; border-radius: 40px; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; color: var(--text-primary); transition: 0.2s; }
+        .btn-outline:hover { background: var(--hover-row); }
+        .slogan { font-size: 1.2rem; color: var(--text-secondary); margin-left: 10px; font-weight: 300; letter-spacing: 0.5px; }
+        .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 30px; }
+        .card-metric { background: var(--bg-card); border-radius: 20px; padding: 1.2rem; box-shadow: var(--shadow); border: 1px solid var(--border); backdrop-filter: blur(4px); }
+        .card-metric h3 { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+        .card-metric .number { font-size: 2.2rem; font-weight: 800; color: var(--text-primary); }
+        .card-metric i { font-size: 1.8rem; color: #3b82f6; float: right; }
+        .form-card { background: var(--bg-card); border-radius: 24px; padding: 1.5rem; border: 1px solid var(--border); margin-bottom: 30px; box-shadow: var(--shadow); backdrop-filter: blur(4px); }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; align-items: end; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        .input-group label { font-weight: 600; font-size: 0.8rem; color: var(--text-secondary); }
+        input, select { background: var(--input-bg); border: 1px solid var(--input-border); padding: 10px 12px; border-radius: 14px; color: var(--text-primary); font-size: 0.9rem; transition: 0.3s; }
+        input:focus, select:focus { outline: none; border-color: #3b82f6; }
+        .btn-primary { background: var(--btn-primary); border: none; padding: 10px 20px; border-radius: 40px; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-primary:hover { background: var(--btn-primary-hover); }
+        .preview-img { margin-top: 6px; width: 50px; height: 50px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border); }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; }
+        .checkbox-group input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--btn-primary); }
+        .table-wrapper { overflow-x: auto; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-card); box-shadow: var(--shadow); backdrop-filter: blur(4px); }
+        table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        th { background: var(--table-header); font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); }
+        tr:hover { background: var(--hover-row); }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 40px; font-size: 0.7rem; font-weight: 700; }
+        .badge-verde { background: var(--badge-green-bg); color: var(--badge-green-text); }
+        .badge-gris { background: var(--badge-gray-bg); color: var(--badge-gray-text); }
+        .badge-frecuente { background: var(--badge-frecuente-bg); color: var(--badge-frecuente-text); }
+        .thumbnail { width: 36px; height: 36px; object-fit: cover; border-radius: 8px; cursor: pointer; border: 1px solid var(--border); }
+        .icon-btn { background: none; border: none; font-size: 1.2rem; cursor: pointer; margin: 0 3px; color: var(--text-secondary); transition: 0.2s; padding: 4px 6px; border-radius: 8px; }
+        .icon-btn:hover { background: var(--hover-row); color: #3b82f6; }
+        .icon-btn.danger:hover { color: #ef4444; }
+        .filtros-bar { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; align-items: center; }
+        .filtros-bar input, .filtros-bar select { background: var(--bg-card); border: 1px solid var(--border); padding: 8px 14px; border-radius: 30px; color: var(--text-primary); }
+        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: var(--modal-bg); justify-content: center; align-items: center; z-index:1000; backdrop-filter: blur(4px); }
+        .modal-content { background: var(--bg-card); border-radius: 28px; padding:24px; max-width:400px; width:90%; text-align:center; box-shadow: 0 20px 60px rgba(0,0,0,0.3); border:1px solid var(--border); }
+        .modal-content #qrContainer { max-width:100%; border-radius:16px; margin:12px 0; display:inline-block; }
+        .modal-content .qr-actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:12px; }
+        .modal-content .qr-actions button { background: var(--bg-body); border:1px solid var(--border); padding:6px 16px; border-radius:30px; cursor:pointer; }
+        .modal-content .qr-actions button:hover { background: var(--hover-row); }
+        .close-modal { margin-top:15px; background:#ef4444; border:none; padding:6px 20px; border-radius:30px; color:white; cursor:pointer; }
+        .close-modal:hover { background:#dc2626; }
+        .ubicacion-link { display:inline-block; margin-top:10px; padding:8px 16px; background:var(--btn-primary); color:white; border-radius:30px; text-decoration:none; font-weight:600; font-size:0.9rem; transition:0.2s; }
+        .ubicacion-link:hover { background:var(--btn-primary-hover); color:white; }
+        .btn-download-foto { background: #10b981; border: none; padding: 6px 16px; border-radius: 30px; color: white; font-weight: 600; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-download-foto:hover { background: #059669; }
+        .fab-actions { position: fixed; bottom: 20px; right: 20px; z-index: 999; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+        .fab-actions .fab-toggle { width: 56px; height: 56px; border-radius: 50%; background: var(--float-btn-bg); color: var(--float-btn-color); border: none; font-size: 1.8rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3); cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+        .fab-actions .fab-toggle:hover { transform: scale(1.05); }
+        .fab-actions .fab-menu { display: none; flex-direction: column; gap: 8px; background: var(--bg-card); border-radius: 20px; padding: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); border: 1px solid var(--border); }
+        .fab-actions .fab-menu.show { display: flex; }
+        .fab-actions .fab-menu button { background: none; border: none; padding: 8px 16px; border-radius: 30px; font-size: 0.9rem; font-weight: 500; display: flex; align-items: center; gap: 10px; color: var(--text-primary); cursor: pointer; transition: 0.2s; white-space: nowrap; }
+        .fab-actions .fab-menu button:hover { background: var(--hover-row); }
+        @media (max-width: 640px) {
+            body { padding: 12px; }
+            .card-metric .number { font-size: 1.6rem; }
+            .form-grid { grid-template-columns: 1fr; }
+            input, select, .btn-primary, .btn-outline, .theme-toggle { font-size: 1rem; padding: 12px 16px; min-height: 48px; }
+            .btn-primary { min-height: 52px; }
+            .header-actions .btn-outline, .header-actions .theme-toggle { padding: 10px 14px; font-size: 0.9rem; }
+            .dashboard-header { flex-direction: column; align-items: stretch; }
+            .slogan { font-size: 1rem; margin-left: 0; display: block; }
+            .fab-actions { bottom: 16px; right: 16px; }
+            .header-actions .btn-outline:not(.keep) { display: none; }
+        }
+        @media (max-width: 480px) {
+            table { font-size: 0.8rem; }
+            th, td { padding: 8px 6px; }
+            .icon-btn { font-size: 1rem; }
+        }
+        .editable-input { background:var(--bg-card); border:1px solid var(--border); padding:4px 8px; border-radius:8px; color:var(--text-primary); width:100%; }
+        .readonly-field { background:var(--bg-body); border:1px solid var(--border); padding:6px 10px; border-radius:8px; color:var(--text-secondary); width:100%; font-size:0.9rem; display:inline-block; }
+        .input-error { border-color:#ef4444 !important; }
+        .error-msg { color:#ef4444; font-size:0.75rem; margin-top:4px; }
+        .edit-checkbox { display:flex; align-items:center; gap:8px; }
+        .edit-checkbox input[type="checkbox"] { width:18px; height:18px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="dashboard-header">
+        <div>
+            <h1><i class="fas fa-box"></i> MaxiEntregas</h1>
+            <span class="slogan"><i class="fas fa-clock"></i> Maximizando tu tiempo</span>
+        </div>
+        <div class="header-actions">
+            <button class="theme-toggle keep" id="themeToggle"><i class="fas fa-moon"></i> <span class="hide-mobile">Modo oscuro</span></button>
+            <button class="btn-outline keep" onclick="exportarDatos()"><i class="fas fa-download"></i> <span class="hide-mobile">Exportar</span></button>
+            <button class="btn-outline keep" onclick="document.getElementById('importFile').click()"><i class="fas fa-upload"></i> <span class="hide-mobile">Importar</span></button>
+            <input type="file" id="importFile" accept=".json" style="display:none" onchange="importarDatos(event)">
+        </div>
+    </div>
+
+    <div class="cards-grid" id="metricsContainer">
+        <div class="card-metric"><h3><i class="fas fa-boxes"></i> Total</h3><div class="number" id="metricTotal">0</div></div>
+        <div class="card-metric"><h3><i class="fas fa-check-circle"></i> Entregados</h3><div class="number" id="metricEntregados">0</div></div>
+        <div class="card-metric"><h3><i class="fas fa-clock"></i> Hoy</h3><div class="number" id="metricHoy">0</div></div>
+    </div>
+
+    <div class="form-card">
+        <h3 style="margin-bottom:15px;"><i class="fas fa-plus-circle"></i> Nuevo paquete</h3>
+        <div class="form-grid">
+            <div class="input-group">
+                <label>ID del paquete * (único)</label>
+                <input type="text" id="idPaquete" placeholder="Se genera automáticamente" required>
+                <div id="idError" class="error-msg"></div>
+            </div>
+            <div class="input-group">
+                <label>Nombre completo *</label>
+                <input type="text" id="nombreCliente" placeholder="Ej: Ana López">
+            </div>
+            <div class="input-group">
+                <label>Celular (WhatsApp)</label>
+                <input type="tel" id="celular" placeholder="+51912345678">
+            </div>
+            <div class="input-group">
+                <label>Observaciones</label>
+                <input type="text" id="observaciones" placeholder="Frágil, etc.">
+            </div>
+            <div class="input-group">
+                <label>Ciudad *</label>
+                <select id="ciudad">
+                    <option value="LA PAZ">LA PAZ</option>
+                    <option value="EL ALTO">EL ALTO</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Cantidad de paquetes</label>
+                <input type="number" id="cantidadPaquetes" min="1" value="1">
+            </div>
+            <div class="input-group">
+                <label>Cliente frecuente</label>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="clienteFrecuente">
+                    <span style="font-size:0.9rem;">Marcar como frecuente</span>
+                </div>
+            </div>
+            <div class="input-group">
+                <label>ID Empresa</label>
+                <input type="text" id="idEmpresa" list="listaEmpresas" placeholder="Ej: EMP-001">
+                <datalist id="listaEmpresas"></datalist>
+            </div>
+            <div class="input-group">
+                <label>Nombre Empresa</label>
+                <input type="text" id="nombreEmpresa" placeholder="Ej: Importadora XYZ">
+            </div>
+            <div class="input-group">
+                <label>Foto (evidencia)</label>
+                <input type="file" id="fotoInput" accept="image/*" capture="environment">
+                <img id="previewFoto" class="preview-img" style="display:none;">
+            </div>
+            <div class="input-group">
+                <button id="btnRegistrar" class="btn-primary"><i class="fas fa-save"></i> Registrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="filtros-bar">
+        <input type="text" id="filtroNombre" placeholder="🔍 Buscar por nombre..." style="flex:2;">
+        <select id="filtroEstado">
+            <option value="todos">Todos los estados</option>
+            <option value="entregado">✅ Entregado</option>
+            <option value="frecuentes">⭐ Clientes frecuentes</option>
+        </select>
+        <button id="resetFiltros" class="icon-btn" title="Resetear"><i class="fas fa-undo-alt"></i></button>
+    </div>
+
+    <div class="table-wrapper">
+        <table id="tablaPaquetes">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Celular</th>
+                    <th>Ciudad</th>
+                    <th>Cantidad</th>
+                    <th>Frecuente</th>
+                    <th>ID Empresa</th>
+                    <th>Nombre Empresa</th>
+                    <th>Fecha ingreso</th>
+                    <th>Estado</th>
+                    <th>Entregado</th>
+                    <th>Foto</th>
+                    <th>QR</th>
+                    <th>WhatsApp</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyPaquetes"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- FAB -->
+<div class="fab-actions" id="fabActions">
+    <div class="fab-menu" id="fabMenu">
+        <button onclick="exportarDatos()"><i class="fas fa-download"></i> Exportar</button>
+        <button onclick="document.getElementById('importFile').click()"><i class="fas fa-upload"></i> Importar</button>
+        <button onclick="document.getElementById('themeToggle').click()"><i class="fas fa-moon"></i> Tema oscuro</button>
+    </div>
+    <button class="fab-toggle" id="fabToggle"><i class="fas fa-ellipsis-v"></i></button>
+</div>
+
+<!-- MODALES -->
+<div id="modalFoto" class="modal">
+    <div class="modal-content">
+        <img id="modalImg" src="" style="max-width:100%; border-radius:12px; margin-bottom:10px;">
+        <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+            <button class="btn-download-foto" onclick="descargarFotoActual()"><i class="fas fa-download"></i> Descargar foto</button>
+            <button class="close-modal" id="closeModalFoto">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modalQR" class="modal">
+    <div class="modal-content">
+        <h3><i class="fas fa-qrcode"></i> QR del paquete</h3>
+        <div id="qrContainer" style="display:inline-block;"></div>
+        <p id="qrInfo" style="font-size:0.8rem; color:var(--text-secondary); word-break:break-all;"></p>
+        <a id="ubicacionLink" href="#" target="_blank" class="ubicacion-link">
+            <i class="fas fa-map-marker-alt"></i> Ver ubicación en Maps
+        </a>
+        <div class="qr-actions">
+            <button onclick="descargarQR()"><i class="fas fa-download"></i> Descargar PNG</button>
+            <button onclick="copiarQR()"><i class="fas fa-copy"></i> Copiar texto</button>
+        </div>
+        <button class="close-modal" id="closeModalQR">Cerrar</button>
+    </div>
+</div>
+
+<div id="modalEditar" class="modal">
+    <div class="modal-content" style="max-width:450px;">
+        <h3><i class="fas fa-edit"></i> Editar paquete</h3>
+        <div style="text-align:left; margin:15px 0;">
+            <div class="input-group"><label>ID (no editable)</label>
+                <span class="readonly-field" id="editId">--</span>
+            </div>
+            <div class="input-group"><label>Nombre</label><input type="text" id="editNombre" class="editable-input"></div>
+            <div class="input-group"><label>Celular</label><input type="text" id="editCelular" class="editable-input"></div>
+            <div class="input-group"><label>Ciudad</label>
+                <select id="editCiudad" class="editable-input">
+                    <option value="LA PAZ">LA PAZ</option>
+                    <option value="EL ALTO">EL ALTO</option>
+                </select>
+            </div>
+            <div class="input-group"><label>Cantidad de paquetes</label>
+                <input type="number" id="editCantidad" min="1" class="editable-input">
+            </div>
+            <div class="input-group"><label>Cliente frecuente</label>
+                <div class="edit-checkbox">
+                    <input type="checkbox" id="editFrecuente">
+                    <span>Marcar como frecuente</span>
+                </div>
+            </div>
+            <div class="input-group"><label>ID Empresa</label>
+                <input type="text" id="editIdEmpresa" class="editable-input" placeholder="Ej: EMP-001">
+            </div>
+            <div class="input-group"><label>Nombre Empresa</label>
+                <input type="text" id="editNombreEmpresa" class="editable-input" placeholder="Ej: Importadora XYZ">
+            </div>
+            <div class="input-group"><label>Fecha de ingreso</label>
+                <span class="readonly-field" id="editFechaIngreso">--</span>
+            </div>
+            <div class="input-group"><label>Observaciones</label><input type="text" id="editObservaciones" class="editable-input"></div>
+        </div>
+        <button id="btnGuardarEdicion" class="btn-primary"><i class="fas fa-save"></i> Guardar cambios</button>
+        <button class="close-modal" id="closeModalEditar" style="background:#94a3b8; margin-top:8px;">Cancelar</button>
+    </div>
+</div>
+
+<script>
+    // ============================================================
+    //  🔥 CONFIGURACIÓN DE FIREBASE (¡REEMPLAZA CON TUS DATOS!)
+    // ============================================================
+    const firebaseConfig = {
+        apiKey: "AIzaSyDmZ9BUHPhjkOtXNNVdLuz46PDB_pcK5EU",          // 👈 REEMPLAZA
+        authDomain: "paqueteria-maxi.firebaseapp.com",
+        databaseURL: "https://paqueteria-maxi-default-rtdb.firebaseio.com",
+        projectId: "paqueteria-maxi",
+        storageBucket: "paqueteria-maxi.firebasestorage.app",
+        messagingSenderId: "116496471170",
+        appId: "1:116496471170:web:91feacd0e518e9fbf7509b"
+    };
+
+    // Inicializar Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // ============================================================
+    //  MODELO DE DATOS (global)
+    // ============================================================
+    let paquetes = [];
+    let currentEditId = null;
+    let currentQRPaquete = null;
+    let currentQRUrl = "";
+    let currentFotoBase64 = "";
+    let currentFotoId = "";
+
+    const UBICACION_URL_LA_PAZ = "https://maps.app.goo.gl/6fNSSSgyLRrF5fzG8?g_st=aw";
+    const UBICACION_URL_EL_ALTO = "https://maps.app.goo.gl/mPxBRuaqP2NXSuQb7?g_st=aw";
+    const DIRECCION_LA_PAZ = "CALLE COLON N°161 Edif. BARROSQUIRA (Sub Suelo)";
+    const DIRECCION_EL_ALTO = "ZONA 16 DE JULIO A DOS CUADRAS DEL CEIBO";
+    const URL_IMAGEN_MAXI = "https://i.postimg.cc/TPZ7886Z/2-maxi.png";
+
+    function generarToken() { return Math.random().toString(36).substring(2, 14); }
+    function hoyISO() { return new Date().toISOString().split('T')[0]; }
+
+    // ============================================================
+    //  FUNCIONES DE LECTURA/ESCRITURA EN FIREBASE
+    // ============================================================
+    function guardarDatos() {
+        return database.ref('paquetes').set(paquetes);
+    }
+
+    // Carga inicial (solo una vez)
+    function cargarDatos() {
+        return database.ref('paquetes').once('value').then(snapshot => {
+            const data = snapshot.val();
+            if (data) {
+                paquetes = data;
+            } else {
+                // Datos de ejemplo si no hay nada
+                const ahora = new Date().toISOString();
+                paquetes = [
+                    { id: "PAC-001", nombre: "Ana Lucía Pérez", celular: "+51987654321", observaciones: "Frágil", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "LA PAZ", clienteFrecuente: true, cantidadPaquetes: 3, idEmpresa: "EMP-001", nombreEmpresa: "Importadora Pérez" },
+                    { id: "EMP-001-001", nombre: "Pedro Fernández", celular: "+59171234567", observaciones: "Cliente frecuente", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "EL ALTO", clienteFrecuente: true, cantidadPaquetes: 2, idEmpresa: "EMP-001", nombreEmpresa: "Importadora Pérez" },
+                    { id: "PAC-003", nombre: "María Gómez", celular: "+56987654321", observaciones: "Urgente", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "LA PAZ", clienteFrecuente: false, cantidadPaquetes: 2, idEmpresa: "", nombreEmpresa: "" }
+                ];
+                return guardarDatos().then(() => paquetes);
+            }
+            // Migrar campos (por si faltan)
+            paquetes.forEach(p => {
+                if (!p.ciudad) p.ciudad = "LA PAZ";
+                if (p.clienteFrecuente === undefined) p.clienteFrecuente = false;
+                if (p.cantidadPaquetes === undefined) p.cantidadPaquetes = 1;
+                if (p.idEmpresa === undefined) p.idEmpresa = "";
+                if (p.nombreEmpresa === undefined) p.nombreEmpresa = "";
+                p.qrColor = "#000000";
+                p.qrBgColor = "#ffffff";
+                p.logoBase64 = null;
+            });
+            return paquetes;
+        });
+    }
+
+    // ============================================================
+    //  LISTENER EN TIEMPO REAL (solo para actualizar la vista)
+    // ============================================================
+    function iniciarEscucha() {
+        database.ref('paquetes').on('value', snapshot => {
+            const data = snapshot.val();
+            if (data) {
+                paquetes = data;
+                // Asegurar campos
+                paquetes.forEach(p => {
+                    if (!p.ciudad) p.ciudad = "LA PAZ";
+                    if (p.clienteFrecuente === undefined) p.clienteFrecuente = false;
+                    if (p.cantidadPaquetes === undefined) p.cantidadPaquetes = 1;
+                    if (p.idEmpresa === undefined) p.idEmpresa = "";
+                    if (p.nombreEmpresa === undefined) p.nombreEmpresa = "";
+                    p.qrColor = "#000000";
+                    p.qrBgColor = "#ffffff";
+                    p.logoBase64 = null;
+                });
+                actualizarListaEmpresas();
+                renderizarTodo();
+            }
+        });
+    }
+
+    // ============================================================
+    //  RESTO DE FUNCIONES (sin cambios significativos)
+    // ============================================================
+    function generarIdPaquete(idEmpresa) {
+        if (!idEmpresa || idEmpresa.trim() === "") return "";
+        const base = idEmpresa.trim();
+        const coincidentes = paquetes.filter(p => p.idEmpresa === base);
+        let maxNum = 0;
+        const pattern = new RegExp(`^${base}-(\\d{3})$`);
+        coincidentes.forEach(p => {
+            const match = p.id.match(pattern);
+            if (match) {
+                const num = parseInt(match[1], 10);
+                if (num > maxNum) maxNum = num;
+            }
+        });
+        const siguiente = maxNum + 1;
+        const padded = String(siguiente).padStart(3, '0');
+        return `${base}-${padded}`;
+    }
+
+    function actualizarIdPaqueteAutomatico() {
+        const idEmpresa = document.getElementById("idEmpresa").value.trim();
+        if (idEmpresa) {
+            const nuevoId = generarIdPaquete(idEmpresa);
+            document.getElementById("idPaquete").value = nuevoId;
+        } else {
+            document.getElementById("idPaquete").value = "";
+        }
+    }
+
+    function autocompletarNombreEmpresa() {
+        const idEmpresa = document.getElementById("idEmpresa").value.trim();
+        if (!idEmpresa) {
+            document.getElementById("nombreEmpresa").value = "";
+            return;
+        }
+        const encontrado = paquetes.find(p => p.idEmpresa === idEmpresa && p.nombreEmpresa);
+        if (encontrado) {
+            document.getElementById("nombreEmpresa").value = encontrado.nombreEmpresa;
+        } else {
+            document.getElementById("nombreEmpresa").value = "";
+        }
+    }
+
+    function actualizarListaEmpresas() {
+        const ids = new Set();
+        paquetes.forEach(p => {
+            if (p.idEmpresa && p.idEmpresa.trim() !== "") {
+                ids.add(p.idEmpresa.trim());
+            }
+        });
+        const datalist = document.getElementById("listaEmpresas");
+        datalist.innerHTML = "";
+        ids.forEach(id => {
+            const option = document.createElement("option");
+            option.value = id;
+            datalist.appendChild(option);
+        });
+    }
+
+    function idExiste(id) {
+        return paquetes.some(p => p.id === id);
+    }
+
+    // ============================================================
+    //  REGISTRAR PAQUETE (con await para esperar la escritura)
+    // ============================================================
+    async function registrarPaquete(id, nombre, celular, observaciones, ciudad, cantidad, frecuente, idEmpresa, nombreEmpresa, fotoBase64) {
+        // Validaciones
+        if (!id.trim()) { alert("El ID es obligatorio"); return false; }
+        if (idExiste(id)) { alert("Ya existe un paquete con ese ID. Por favor usa otro."); return false; }
+        if (!nombre.trim()) { alert("El nombre es obligatorio"); return false; }
+        if (!ciudad) { alert("Debes seleccionar una ciudad"); return false; }
+        if (!cantidad || cantidad < 1) { alert("La cantidad debe ser al menos 1"); return false; }
+        if (frecuente && !idEmpresa.trim()) {
+            alert("Si marca como cliente frecuente, debe especificar un ID de empresa.");
+            return false;
+        }
+
+        const ahora = new Date().toISOString();
+        const token = generarToken();
+        const urlValidacion = `https://logi.app/v/${token}`;
+        const nuevo = {
+            id: id.trim(),
+            nombre: nombre.trim(),
+            celular: celular.trim() || "",
+            observaciones: observaciones.trim() || "",
+            ciudad: ciudad,
+            cantidadPaquetes: parseInt(cantidad, 10),
+            clienteFrecuente: !!frecuente,
+            idEmpresa: idEmpresa.trim() || "",
+            nombreEmpresa: nombreEmpresa.trim() || "",
+            fechaIngreso: ahora,
+            entregado: false,
+            fotoBase64: fotoBase64 || "",
+            tokenQR: token,
+            urlValidacion: urlValidacion,
+            qrColor: "#000000",
+            qrBgColor: "#ffffff",
+            logoBase64: null
+        };
+        paquetes.push(nuevo);
+        try {
+            await guardarDatos();
+            return true;
+        } catch (err) {
+            alert("Error al guardar en Firebase: " + err.message);
+            // Revertir el push local
+            paquetes.pop();
+            return false;
+        }
+    }
+
+    // ============================================================
+    //  EDITAR
+    // ============================================================
+    function abrirEditor(id) {
+        const p = paquetes.find(p => p.id === id);
+        if (!p) return;
+        currentEditId = id;
+        document.getElementById("editId").textContent = p.id;
+        document.getElementById("editNombre").value = p.nombre;
+        document.getElementById("editCelular").value = p.celular;
+        document.getElementById("editCiudad").value = p.ciudad || "LA PAZ";
+        document.getElementById("editCantidad").value = p.cantidadPaquetes || 1;
+        document.getElementById("editFrecuente").checked = p.clienteFrecuente || false;
+        document.getElementById("editIdEmpresa").value = p.idEmpresa || "";
+        document.getElementById("editNombreEmpresa").value = p.nombreEmpresa || "";
+        document.getElementById("editFechaIngreso").textContent = p.fechaIngreso.split('T')[0];
+        document.getElementById("editObservaciones").value = p.observaciones || "";
+        document.getElementById("modalEditar").style.display = "flex";
+    }
+
+    document.getElementById("btnGuardarEdicion").addEventListener("click", async function() {
+        const id = currentEditId;
+        const p = paquetes.find(p => p.id === id);
+        if (!p) return;
+        const nombre = document.getElementById("editNombre").value.trim();
+        if (!nombre) { alert("El nombre es obligatorio"); return; }
+        p.nombre = nombre;
+        p.celular = document.getElementById("editCelular").value.trim();
+        p.ciudad = document.getElementById("editCiudad").value;
+        p.cantidadPaquetes = parseInt(document.getElementById("editCantidad").value, 10) || 1;
+        p.clienteFrecuente = document.getElementById("editFrecuente").checked;
+        p.idEmpresa = document.getElementById("editIdEmpresa").value.trim();
+        p.nombreEmpresa = document.getElementById("editNombreEmpresa").value.trim();
+        p.observaciones = document.getElementById("editObservaciones").value.trim();
+        try {
+            await guardarDatos();
+            document.getElementById("modalEditar").style.display = "none";
+        } catch (err) {
+            alert("Error al guardar cambios: " + err.message);
+        }
+    });
+    document.getElementById("closeModalEditar").onclick = () => document.getElementById("modalEditar").style.display = "none";
+
+    // ============================================================
+    //  TOGGLE ENTREGADO
+    // ============================================================
+    async function toggleEntregado(id) {
+        const p = paquetes.find(p => p.id === id);
+        if (p) {
+            p.entregado = !p.entregado;
+            try {
+                await guardarDatos();
+            } catch (err) {
+                alert("Error al actualizar: " + err.message);
+                // Revertir
+                p.entregado = !p.entregado;
+            }
+        }
+    }
+
+    async function eliminarPaquete(id) {
+        if (!confirm("¿Eliminar permanentemente?")) return;
+        const index = paquetes.findIndex(p => p.id === id);
+        if (index === -1) return;
+        const eliminado = paquetes.splice(index, 1)[0];
+        try {
+            await guardarDatos();
+        } catch (err) {
+            alert("Error al eliminar: " + err.message);
+            paquetes.splice(index, 0, eliminado); // revertir
+        }
+    }
+
+    // ============================================================
+    //  WHATSAPP
+    // ============================================================
+    function enviarWhatsApp(p) {
+        let mensaje = "";
+        const ciudad = p.ciudad || "LA PAZ";
+        if (ciudad === "EL ALTO") {
+            mensaje = `Hola. ${p.nombre} 
+Le informamos que su paquete (${p.cantidadPaquetes} unidad(es)) ya está listo. 
+Puede recogerlo en la siguiente dirección: 
+${DIRECCION_EL_ALTO}
+Somos *Polem Paquetería* — donde cada paquete florece. 
+📞 Cel.: 65648456
+📍 Ubicación: ${UBICACION_URL_EL_ALTO}
+Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
+        } else {
+            mensaje = `${URL_IMAGEN_MAXI}
+
+Hola. ${p.nombre} 
+Le informamos que su paquete (${p.cantidadPaquetes} unidad(es)) ya está listo. 
+Puede recogerlo en la siguiente dirección: 
+${DIRECCION_LA_PAZ}
+Somos *MaxiEntregas* — Maximizando tu tiempo. 
+📞 Cel.: 57020109 
+Un lugar seguro y confiable.
+📍 Ubicación: ${UBICACION_URL_LA_PAZ}
+Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
+        }
+        window.open(`https://wa.me/${p.celular}?text=${encodeURIComponent(mensaje)}`, '_blank');
+    }
+
+    // ============================================================
+    //  QR
+    // ============================================================
+    let qrInstance = null;
+
+    function mostrarQR(paquete) {
+        try {
+            currentQRPaquete = paquete;
+            const container = document.getElementById("qrContainer");
+            if (!container) { alert("Error: No se encontró el contenedor #qrContainer"); return; }
+            container.innerHTML = "";
+
+            const ciudad = paquete.ciudad || "LA PAZ";
+            let url, direccion;
+            if (ciudad === "EL ALTO") {
+                url = UBICACION_URL_EL_ALTO;
+                direccion = DIRECCION_EL_ALTO;
+            } else {
+                url = UBICACION_URL_LA_PAZ;
+                direccion = DIRECCION_LA_PAZ;
+            }
+            currentQRUrl = url;
+
+            document.getElementById("ubicacionLink").href = url;
+
+            const data = `ID: ${paquete.id} - ${paquete.nombre} - ${url}`;
+            const options = {
+                text: data,
+                width: 220,
+                height: 220,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.L,
+                version: 10
+            };
+            const qr = new QRCode(container, options);
+            qrInstance = qr;
+
+            document.getElementById("qrInfo").innerHTML = `
+                <strong>ID:</strong> ${paquete.id}<br>
+                <strong>Nombre:</strong> ${paquete.nombre}<br>
+                <strong>Ciudad:</strong> ${ciudad}<br>
+                <strong>Dirección:</strong> ${direccion}<br>
+                <strong>Ubicación:</strong> <a href="${url}" target="_blank" style="color:var(--text-primary);">${url}</a>
+            `;
+            document.getElementById("modalQR").style.display = "flex";
+        } catch (error) {
+            console.error("Error al generar QR:", error);
+            alert("Ocurrió un error al generar el QR. Revisa la consola.");
+        }
+    }
+
+    function descargarQR() {
+        const canvas = document.querySelector('#qrContainer canvas');
+        if (!canvas) return;
+        const link = document.createElement('a');
+        link.download = `QR_${currentQRPaquete.id}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+
+    function copiarQR() {
+        if (currentQRPaquete) {
+            const texto = `ID: ${currentQRPaquete.id}\nNombre: ${currentQRPaquete.nombre}\nCiudad: ${currentQRPaquete.ciudad}\nCantidad: ${currentQRPaquete.cantidadPaquetes}\nUbicación: ${currentQRUrl}`;
+            navigator.clipboard.writeText(texto).catch(() => prompt("Copiar manualmente:", texto));
+        }
+    }
+
+    // ============================================================
+    //  FOTO
+    // ============================================================
+    function verFoto(id, fotoBase64) {
+        if (!fotoBase64) return;
+        currentFotoId = id;
+        currentFotoBase64 = fotoBase64;
+        document.getElementById("modalImg").src = fotoBase64;
+        document.getElementById("modalFoto").style.display = "flex";
+    }
+
+    function descargarFotoActual() {
+        if (!currentFotoBase64) return;
+        const link = document.createElement('a');
+        const nombreArchivo = currentFotoId ? `${currentFotoId}.png` : `foto_${Date.now()}.png`;
+        link.download = nombreArchivo;
+        link.href = currentFotoBase64;
+        link.click();
+    }
+
+    document.getElementById("closeModalFoto").onclick = () => document.getElementById("modalFoto").style.display = "none";
+    document.getElementById("closeModalQR").onclick = () => document.getElementById("modalQR").style.display = "none";
+    window.onclick = (e) => { if (e.target.classList.contains('modal')) e.target.style.display = "none"; };
+
+    // ============================================================
+    //  RENDERIZAR
+    // ============================================================
+    function getFiltrados() {
+        let filtrados = [...paquetes];
+        const texto = document.getElementById("filtroNombre").value.toLowerCase();
+        const estado = document.getElementById("filtroEstado").value;
+        if (texto) filtrados = filtrados.filter(p => p.nombre.toLowerCase().includes(texto) || p.id.toLowerCase().includes(texto));
+        if (estado !== "todos") {
+            if (estado === "entregado") filtrados = filtrados.filter(p => p.entregado);
+            else if (estado === "frecuentes") filtrados = filtrados.filter(p => p.clienteFrecuente === true);
+        }
+        return filtrados;
+    }
+
+    function actualizarMetricas() {
+        document.getElementById("metricTotal").textContent = paquetes.length;
+        document.getElementById("metricEntregados").textContent = paquetes.filter(p => p.entregado).length;
+        const hoy = hoyISO();
+        document.getElementById("metricHoy").textContent = paquetes.filter(p => p.fechaIngreso.split('T')[0] === hoy && !p.entregado).length;
+    }
+
+    function renderizarTodo() {
+        actualizarMetricas();
+        const filtrados = getFiltrados();
+        const tbody = document.getElementById("tbodyPaquetes");
+        tbody.innerHTML = "";
+        filtrados.forEach(p => {
+            let badgeText = p.entregado ? "Entregado" : "Verde";
+            let badgeClass = p.entregado ? "badge-gris" : "badge-verde";
+
+            const fotoHTML = p.fotoBase64 ? `<img src="${p.fotoBase64}" class="thumbnail" onclick="verFoto('${p.id}', '${p.fotoBase64}')">` : `<span class="icon-btn"><i class="fas fa-camera-slash"></i></span>`;
+            const entregadoCheck = `<input type="checkbox" ${p.entregado ? "checked" : ""} onchange="toggleEntregado('${p.id}')">`;
+            const frecuenteHTML = p.clienteFrecuente ? '<span class="badge badge-frecuente">⭐ Frecuente</span>' : 'No';
+            const fechaIngresoStr = p.fechaIngreso.split('T')[0];
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${p.id}</strong></td>
+                <td>${p.nombre}</td>
+                <td>${p.celular}</td>
+                <td>${p.ciudad || "LA PAZ"}</td>
+                <td>${p.cantidadPaquetes || 1}</td>
+                <td>${frecuenteHTML}</td>
+                <td>${p.idEmpresa || '—'}</td>
+                <td>${p.nombreEmpresa || '—'}</td>
+                <td>${fechaIngresoStr}</td>
+                <td><span class="badge ${badgeClass}">${badgeText}</span></td>
+                <td>${entregadoCheck}</td>
+                <td>${fotoHTML}</td>
+                <td><button class="icon-btn" onclick="mostrarQR(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fas fa-qrcode"></i></button></td>
+                <td><button class="icon-btn" onclick="enviarWhatsApp(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fab fa-whatsapp" style="color:#25d366;"></i></button></td>
+                <td>
+                    <button class="icon-btn" onclick="abrirEditor('${p.id}')"><i class="fas fa-edit"></i></button>
+                    <button class="icon-btn danger" onclick="eliminarPaquete('${p.id}')"><i class="fas fa-trash"></i></button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // ============================================================
+    //  EVENTOS FORMULARIO
+    // ============================================================
+    let currentFotoBase64Upload = "";
+
+    document.getElementById("idPaquete").addEventListener("input", function() {
+        const id = this.value.trim();
+        const errorDiv = document.getElementById("idError");
+        if (!id) {
+            errorDiv.textContent = "";
+            this.classList.remove("input-error");
+            return;
+        }
+        if (idExiste(id)) {
+            errorDiv.textContent = "⚠️ Este ID ya está en uso. Elige otro.";
+            this.classList.add("input-error");
+        } else {
+            errorDiv.textContent = "";
+            this.classList.remove("input-error");
+        }
+    });
+
+    document.getElementById("idEmpresa").addEventListener("input", function() {
+        actualizarIdPaqueteAutomatico();
+        autocompletarNombreEmpresa();
+    });
+
+    document.getElementById("fotoInput").addEventListener("change", function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                currentFotoBase64Upload = ev.target.result;
+                document.getElementById("previewFoto").src = currentFotoBase64Upload;
+                document.getElementById("previewFoto").style.display = "block";
+            };
+            reader.readAsDataURL(file);
+        } else {
+            currentFotoBase64Upload = "";
+            document.getElementById("previewFoto").style.display = "none";
+        }
+    });
+
+    document.getElementById("btnRegistrar").addEventListener("click", async function() {
+        const id = document.getElementById("idPaquete").value;
+        const nombre = document.getElementById("nombreCliente").value;
+        const celular = document.getElementById("celular").value;
+        const observaciones = document.getElementById("observaciones").value;
+        const ciudad = document.getElementById("ciudad").value;
+        const cantidad = document.getElementById("cantidadPaquetes").value;
+        const frecuente = document.getElementById("clienteFrecuente").checked;
+        const idEmpresa = document.getElementById("idEmpresa").value;
+        const nombreEmpresa = document.getElementById("nombreEmpresa").value;
+
+        if (!id.trim()) { alert("El ID es obligatorio"); return; }
+        if (idExiste(id)) { alert("Ya existe un paquete con ese ID. Por favor usa otro."); return; }
+        if (!nombre.trim()) { alert("El nombre es obligatorio"); return; }
+        if (!ciudad) { alert("Debes seleccionar una ciudad"); return; }
+        if (!cantidad || parseInt(cantidad, 10) < 1) { alert("La cantidad debe ser al menos 1"); return; }
+        if (frecuente && !idEmpresa.trim()) {
+            alert("Si marca como cliente frecuente, debe especificar un ID de empresa.");
+            return;
+        }
+
+        const exito = await registrarPaquete(id, nombre, celular, observaciones, ciudad, cantidad, frecuente, idEmpresa, nombreEmpresa, currentFotoBase64Upload);
+        if (exito) {
+            // Limpiar formulario solo si se guardó correctamente
+            document.getElementById("idPaquete").value = "";
+            document.getElementById("nombreCliente").value = "";
+            document.getElementById("celular").value = "";
+            document.getElementById("observaciones").value = "";
+            document.getElementById("ciudad").value = "LA PAZ";
+            document.getElementById("cantidadPaquetes").value = "1";
+            document.getElementById("clienteFrecuente").checked = false;
+            document.getElementById("idEmpresa").value = "";
+            document.getElementById("nombreEmpresa").value = "";
+            document.getElementById("fotoInput").value = "";
+            document.getElementById("previewFoto").style.display = "none";
+            document.getElementById("idError").textContent = "";
+            document.getElementById("idPaquete").classList.remove("input-error");
+            currentFotoBase64Upload = "";
+        }
+    });
+
+    // ============================================================
+    //  FILTROS
+    // ============================================================
+    document.getElementById("filtroNombre").addEventListener("input", renderizarTodo);
+    document.getElementById("filtroEstado").addEventListener("change", renderizarTodo);
+    document.getElementById("resetFiltros").addEventListener("click", function() {
+        document.getElementById("filtroNombre").value = "";
+        document.getElementById("filtroEstado").value = "todos";
+        renderizarTodo();
+    });
+
+    // ============================================================
+    //  EXPORTAR / IMPORTAR (solo respaldo)
+    // ============================================================
+    function exportarDatos() {
+        const blob = new Blob([JSON.stringify(paquetes, null, 2)], {type: "application/json"});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `paquetes_backup_${hoyISO()}.json`;
+        link.click();
+    }
+
+    function importarDatos(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (Array.isArray(data)) {
+                    paquetes = data;
+                    paquetes.forEach(p => {
+                        if (!p.ciudad) p.ciudad = "LA PAZ";
+                        if (p.clienteFrecuente === undefined) p.clienteFrecuente = false;
+                        if (p.cantidadPaquetes === undefined) p.cantidadPaquetes = 1;
+                        if (p.idEmpresa === undefined) p.idEmpresa = "";
+                        if (p.nombreEmpresa === undefined) p.nombreEmpresa = "";
+                        p.qrColor = "#000000";
+                        p.qrBgColor = "#ffffff";
+                        p.logoBase64 = null;
+                    });
+                    await guardarDatos();
+                    alert("Datos importados correctamente");
+                } else alert("Formato inválido");
+            } catch (err) { alert("Error al leer el archivo: " + err.message); }
+        };
+        reader.readAsText(file);
+        document.getElementById("importFile").value = "";
+    }
+
+    // ============================================================
+    //  MODO OSCURO (con DOMContentLoaded para asegurar)
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        const themeToggle = document.getElementById("themeToggle");
+        // Restaurar estado
+        if (localStorage.getItem("darkMode") === "true") {
+            document.body.classList.add("dark");
+            themeToggle.innerHTML = '<i class="fas fa-sun"></i> Modo claro';
+        }
+        themeToggle.addEventListener("click", function() {
+            document.body.classList.toggle("dark");
+            const isDark = document.body.classList.contains("dark");
+            localStorage.setItem("darkMode", isDark);
+            this.innerHTML = isDark ? '<i class="fas fa-sun"></i> Modo claro' : '<i class="fas fa-moon"></i> Modo oscuro';
+        });
+    });
+
+    // ============================================================
+    //  FAB (botón flotante) para móvil
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        const fabToggle = document.getElementById('fabToggle');
+        const fabMenu = document.getElementById('fabMenu');
+        fabToggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            fabMenu.classList.toggle('show');
+        });
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.fab-actions')) {
+                fabMenu.classList.remove('show');
+            }
+        });
+        function handleFabVisibility() {
+            const fab = document.getElementById('fabActions');
+            if (window.innerWidth < 640) {
+                fab.style.display = 'flex';
+            } else {
+                fab.style.display = 'none';
+            }
+        }
+        window.addEventListener('resize', handleFabVisibility);
+        handleFabVisibility();
+    });
+
+    // ============================================================
+    //  INICIO
+    // ============================================================
+    cargarDatos()
+        .then(() => {
+            actualizarListaEmpresas();
+            renderizarTodo();
+            iniciarEscucha();  // Escucha en tiempo real después de la carga inicial
+        })
+        .catch(err => {
+            console.error("Error inicial:", err);
+            alert("No se pudo conectar con Firebase. Revisa la consola para más detalles.");
+        });
+</script>
+</body>
+</html>
