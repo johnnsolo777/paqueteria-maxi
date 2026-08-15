@@ -144,6 +144,13 @@
         .error-msg { color:#ef4444; font-size:0.75rem; margin-top:4px; }
         .edit-checkbox { display:flex; align-items:center; gap:8px; }
         .edit-checkbox input[type="checkbox"] { width:18px; height:18px; }
+        /* Paginación */
+        .pagination { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px; padding: 10px; flex-wrap: wrap; }
+        .pagination button { background: var(--bg-card); border: 1px solid var(--border); padding: 6px 14px; border-radius: 20px; cursor: pointer; color: var(--text-primary); transition: 0.2s; }
+        .pagination button:hover { background: var(--hover-row); }
+        .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pagination span { color: var(--text-secondary); font-size: 0.9rem; }
+        .pagination .active { background: var(--btn-primary); color: #fff; border-color: var(--btn-primary); }
     </style>
 </head>
 <body>
@@ -258,6 +265,12 @@
             </thead>
             <tbody id="tbodyPaquetes"></tbody>
         </table>
+        <!-- Paginación -->
+        <div class="pagination" id="pagination">
+            <button id="prevPage" onclick="cambiarPagina(-1)"><i class="fas fa-chevron-left"></i> Anterior</button>
+            <span id="pageInfo">Página 1 de 1</span>
+            <button id="nextPage" onclick="cambiarPagina(1)">Siguiente <i class="fas fa-chevron-right"></i></button>
+        </div>
     </div>
 </div>
 
@@ -340,7 +353,7 @@
 
 <script>
     // ============================================================
-    //  🔥 CONFIGURACIÓN DE FIREBASE (¡REEMPLAZA CON TUS DATOS!)
+    //  🔥 CONFIGURACIÓN DE FIREBASE
     // ============================================================
     const firebaseConfig = {
         apiKey: "AIzaSyDmZ9BUHPhjkOtXNNVdLuz46PDB_pcK5EU",
@@ -350,23 +363,26 @@
         storageBucket: "paqueteria-maxi.firebasestorage.app",
         messagingSenderId: "116496471170",
         appId: "1:116496471170:web:91feacd0e518e9fbf7509b"
-        // No incluyas 'measurementId' a menos que lo tengas
     };
 
-    // Inicializar Firebase
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
+    const paquetesRef = database.ref('paquetes');
 
     // ============================================================
     //  MODELO DE DATOS
     // ============================================================
-    let paquetes = [];
+    let paquetes = {}; // Objeto clave-valor (firebase key -> datos)
+    let paquetesList = []; // Array para filtrar y paginar
     let currentEditId = null;
     let currentQRPaquete = null;
     let currentQRUrl = "";
     let currentFotoBase64 = "";
     let currentFotoId = "";
-    let isSaving = false;
+    let pageSize = 20;
+    let currentPage = 1;
+    let totalPages = 1;
+    let totalRegistros = 0;
 
     const UBICACION_URL_LA_PAZ = "https://maps.app.goo.gl/6fNSSSgyLRrF5fzG8?g_st=aw";
     const UBICACION_URL_EL_ALTO = "https://maps.app.goo.gl/mPxBRuaqP2NXSuQb7?g_st=aw";
@@ -380,91 +396,212 @@
     // ============================================================
     //  FUNCIONES DE LECTURA/ESCRITURA
     // ============================================================
-    async function guardarDatos() {
-    if (isSaving) return;
-    isSaving = true;
-    console.log('📤 Guardando en Firebase...', paquetes.length, 'paquetes');
-    try {
-        // Usamos set para sobrescribir toda la colección
-        await database.ref('paquetes').set(paquetes);
-        console.log('✅ Guardado exitoso');
-    } catch (error) {
-        console.error('❌ Error al guardar:', error);
-        // Mostrar el error en la interfaz
-        alert('Error al guardar en Firebase: ' + error.message);
-        throw error;
-    } finally {
-        isSaving = false;
-    }
-}
-
-    async function cargarDatos() {
+    // Usamos push para agregar nuevos paquetes
+    async function agregarPaquete(datos) {
         try {
-            const snapshot = await database.ref('paquetes').once('value');
-            const data = snapshot.val();
-            if (data) {
-                paquetes = data;
-                console.log('📥 Datos cargados desde Firebase:', paquetes.length);
-            } else {
-                console.log('📭 No hay datos en Firebase, se crearán ejemplos');
-                const ahora = new Date().toISOString();
-                paquetes = [
-                    { id: "PAC-001", nombre: "Ana Lucía Pérez", celular: "+51987654321", observaciones: "Frágil", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "LA PAZ", clienteFrecuente: true, cantidadPaquetes: 3, idEmpresa: "EMP-001", nombreEmpresa: "Importadora Pérez" },
-                    { id: "EMP-001-001", nombre: "Pedro Fernández", celular: "+59171234567", observaciones: "Cliente frecuente", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "EL ALTO", clienteFrecuente: true, cantidadPaquetes: 2, idEmpresa: "EMP-001", nombreEmpresa: "Importadora Pérez" },
-                    { id: "PAC-003", nombre: "María Gómez", celular: "+56987654321", observaciones: "Urgente", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "LA PAZ", clienteFrecuente: false, cantidadPaquetes: 2, idEmpresa: "", nombreEmpresa: "" }
-                ];
-                await guardarDatos();
-            }
-            paquetes.forEach(p => {
-                if (!p.ciudad) p.ciudad = "LA PAZ";
-                if (p.clienteFrecuente === undefined) p.clienteFrecuente = false;
-                if (p.cantidadPaquetes === undefined) p.cantidadPaquetes = 1;
-                if (p.idEmpresa === undefined) p.idEmpresa = "";
-                if (p.nombreEmpresa === undefined) p.nombreEmpresa = "";
-                p.qrColor = "#000000";
-                p.qrBgColor = "#ffffff";
-                p.logoBase64 = null;
-            });
-            return paquetes;
+            const newRef = paquetesRef.push();
+            await newRef.set(datos);
+            console.log('✅ Paquete agregado con ID:', newRef.key);
+            return newRef.key;
         } catch (error) {
-            console.error('❌ Error en cargarDatos:', error);
+            console.error('❌ Error al agregar paquete:', error);
             throw error;
         }
     }
 
+    // Actualizar un paquete existente
+    async function actualizarPaquete(key, datos) {
+        try {
+            await paquetesRef.child(key).update(datos);
+            console.log('✅ Paquete actualizado:', key);
+        } catch (error) {
+            console.error('❌ Error al actualizar paquete:', error);
+            throw error;
+        }
+    }
+
+    // Eliminar un paquete
+    async function eliminarPaqueteFirebase(key) {
+        try {
+            await paquetesRef.child(key).remove();
+            console.log('✅ Paquete eliminado:', key);
+        } catch (error) {
+            console.error('❌ Error al eliminar paquete:', error);
+            throw error;
+        }
+    }
+
+    // ============================================================
+    //  ESCUCHA EN TIEMPO REAL (child_added, child_changed, child_removed)
+    // ============================================================
     function iniciarEscucha() {
-        database.ref('paquetes').on('value', snapshot => {
-            if (isSaving) {
-                console.log('⏳ Ignorando actualización porque estamos guardando...');
-                return;
+        // Escuchar nuevos paquetes
+        paquetesRef.on('child_added', snapshot => {
+            const key = snapshot.key;
+            const data = snapshot.val();
+            if (data) {
+                paquetes[key] = data;
+                console.log('➕ Paquete añadido:', key);
+                totalRegistros++;
+                renderizarTodo();
             }
+        });
+
+        // Escuchar cambios en paquetes existentes
+        paquetesRef.on('child_changed', snapshot => {
+            const key = snapshot.key;
+            const data = snapshot.val();
+            if (data) {
+                paquetes[key] = data;
+                console.log('✏️ Paquete actualizado:', key);
+                renderizarTodo();
+            }
+        });
+
+        // Escuchar eliminaciones
+        paquetesRef.on('child_removed', snapshot => {
+            const key = snapshot.key;
+            if (paquetes[key]) {
+                delete paquetes[key];
+                console.log('🗑️ Paquete eliminado:', key);
+                totalRegistros--;
+                renderizarTodo();
+            }
+        });
+
+        // Carga inicial: obtener todos los datos una sola vez para tener el total
+        paquetesRef.once('value', snapshot => {
             const data = snapshot.val();
             if (data) {
                 paquetes = data;
-                console.log('🔄 Actualización en tiempo real:', paquetes.length);
-                paquetes.forEach(p => {
-                    if (!p.ciudad) p.ciudad = "LA PAZ";
-                    if (p.clienteFrecuente === undefined) p.clienteFrecuente = false;
-                    if (p.cantidadPaquetes === undefined) p.cantidadPaquetes = 1;
-                    if (p.idEmpresa === undefined) p.idEmpresa = "";
-                    if (p.nombreEmpresa === undefined) p.nombreEmpresa = "";
-                    p.qrColor = "#000000";
-                    p.qrBgColor = "#ffffff";
-                    p.logoBase64 = null;
-                });
-                actualizarListaEmpresas();
+                totalRegistros = Object.keys(paquetes).length;
+                console.log('📥 Carga inicial:', totalRegistros, 'registros');
                 renderizarTodo();
+            } else {
+                // Si no hay datos, crear algunos de ejemplo
+                crearDatosEjemplo();
             }
         });
     }
 
     // ============================================================
-    //  RESTO DE FUNCIONES (sin cambios, solo las que usan guardarDatos)
+    //  DATOS DE EJEMPLO
+    // ============================================================
+    async function crearDatosEjemplo() {
+        const ahora = new Date().toISOString();
+        const ejemplos = [
+            { id: "PAC-001", nombre: "Ana Lucía Pérez", celular: "+51987654321", observaciones: "Frágil", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "LA PAZ", clienteFrecuente: true, cantidadPaquetes: 3, idEmpresa: "EMP-001", nombreEmpresa: "Importadora Pérez" },
+            { id: "EMP-001-001", nombre: "Pedro Fernández", celular: "+59171234567", observaciones: "Cliente frecuente", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "EL ALTO", clienteFrecuente: true, cantidadPaquetes: 2, idEmpresa: "EMP-001", nombreEmpresa: "Importadora Pérez" },
+            { id: "PAC-003", nombre: "María Gómez", celular: "+56987654321", observaciones: "Urgente", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "LA PAZ", clienteFrecuente: false, cantidadPaquetes: 2, idEmpresa: "", nombreEmpresa: "" }
+        ];
+        try {
+            for (const ej of ejemplos) {
+                await agregarPaquete(ej);
+            }
+            console.log('✅ Datos de ejemplo creados');
+        } catch (err) {
+            console.error('❌ Error al crear ejemplos:', err);
+        }
+    }
+
+    // ============================================================
+    //  FILTRADO Y PAGINACIÓN
+    // ============================================================
+    function getFiltrados() {
+        const texto = document.getElementById("filtroNombre").value.toLowerCase();
+        const estado = document.getElementById("filtroEstado").value;
+        let filtrados = Object.values(paquetes);
+        if (texto) filtrados = filtrados.filter(p => p.nombre.toLowerCase().includes(texto) || p.id.toLowerCase().includes(texto));
+        if (estado !== "todos") {
+            if (estado === "entregado") filtrados = filtrados.filter(p => p.entregado);
+            else if (estado === "frecuentes") filtrados = filtrados.filter(p => p.clienteFrecuente === true);
+        }
+        return filtrados;
+    }
+
+    function renderizarTodo() {
+        const filtrados = getFiltrados();
+        totalRegistros = Object.keys(paquetes).length;
+        const totalFiltrados = filtrados.length;
+        totalPages = Math.ceil(totalFiltrados / pageSize) || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+
+        const inicio = (currentPage - 1) * pageSize;
+        const fin = Math.min(inicio + pageSize, totalFiltrados);
+        const paginados = filtrados.slice(inicio, fin);
+
+        actualizarMetricas();
+        renderizarTabla(paginados);
+        actualizarPaginacion(totalFiltrados);
+    }
+
+    function renderizarTabla(lista) {
+        const tbody = document.getElementById("tbodyPaquetes");
+        tbody.innerHTML = "";
+        lista.forEach(p => {
+            let badgeText = p.entregado ? "Entregado" : "Verde";
+            let badgeClass = p.entregado ? "badge-gris" : "badge-verde";
+            const fotoHTML = p.fotoBase64 ? `<img src="${p.fotoBase64}" class="thumbnail" onclick="verFoto('${p.id}', '${p.fotoBase64}')">` : `<span class="icon-btn"><i class="fas fa-camera-slash"></i></span>`;
+            const entregadoCheck = `<input type="checkbox" ${p.entregado ? "checked" : ""} onchange="toggleEntregado('${p.id}')">`;
+            const frecuenteHTML = p.clienteFrecuente ? '<span class="badge badge-frecuente">⭐ Frecuente</span>' : 'No';
+            const fechaIngresoStr = p.fechaIngreso ? p.fechaIngreso.split('T')[0] : '';
+
+            // Encontrar la clave Firebase para este paquete (usamos el id como key de búsqueda)
+            let firebaseKey = null;
+            for (const [key, val] of Object.entries(paquetes)) {
+                if (val.id === p.id) {
+                    firebaseKey = key;
+                    break;
+                }
+            }
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${p.id}</strong></td>
+                <td>${p.nombre}</td>
+                <td>${p.celular}</td>
+                <td>${p.ciudad || "LA PAZ"}</td>
+                <td>${p.cantidadPaquetes || 1}</td>
+                <td>${frecuenteHTML}</td>
+                <td>${p.idEmpresa || '—'}</td>
+                <td>${p.nombreEmpresa || '—'}</td>
+                <td>${fechaIngresoStr}</td>
+                <td><span class="badge ${badgeClass}">${badgeText}</span></td>
+                <td>${entregadoCheck}</td>
+                <td>${fotoHTML}</td>
+                <td><button class="icon-btn" onclick="mostrarQR(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fas fa-qrcode"></i></button></td>
+                <td><button class="icon-btn" onclick="enviarWhatsApp(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fab fa-whatsapp" style="color:#25d366;"></i></button></td>
+                <td>
+                    <button class="icon-btn" onclick="abrirEditor('${p.id}')"><i class="fas fa-edit"></i></button>
+                    <button class="icon-btn danger" onclick="eliminarPaquete('${p.id}')"><i class="fas fa-trash"></i></button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    function actualizarPaginacion(total) {
+        document.getElementById("pageInfo").textContent = `Página ${currentPage} de ${totalPages} (${total} registros)`;
+        document.getElementById("prevPage").disabled = currentPage <= 1;
+        document.getElementById("nextPage").disabled = currentPage >= totalPages;
+    }
+
+    function cambiarPagina(delta) {
+        const nueva = currentPage + delta;
+        if (nueva >= 1 && nueva <= totalPages) {
+            currentPage = nueva;
+            renderizarTodo();
+        }
+    }
+
+    // ============================================================
+    //  FUNCIONES DE NEGOCIO
     // ============================================================
     function generarIdPaquete(idEmpresa) {
         if (!idEmpresa || idEmpresa.trim() === "") return "";
         const base = idEmpresa.trim();
-        const coincidentes = paquetes.filter(p => p.idEmpresa === base);
+        const coincidentes = Object.values(paquetes).filter(p => p.idEmpresa === base);
         let maxNum = 0;
         const pattern = new RegExp(`^${base}-(\\d{3})$`);
         coincidentes.forEach(p => {
@@ -495,7 +632,7 @@
             document.getElementById("nombreEmpresa").value = "";
             return;
         }
-        const encontrado = paquetes.find(p => p.idEmpresa === idEmpresa && p.nombreEmpresa);
+        const encontrado = Object.values(paquetes).find(p => p.idEmpresa === idEmpresa && p.nombreEmpresa);
         if (encontrado) {
             document.getElementById("nombreEmpresa").value = encontrado.nombreEmpresa;
         } else {
@@ -505,7 +642,7 @@
 
     function actualizarListaEmpresas() {
         const ids = new Set();
-        paquetes.forEach(p => {
+        Object.values(paquetes).forEach(p => {
             if (p.idEmpresa && p.idEmpresa.trim() !== "") {
                 ids.add(p.idEmpresa.trim());
             }
@@ -520,9 +657,12 @@
     }
 
     function idExiste(id) {
-        return paquetes.some(p => p.id === id);
+        return Object.values(paquetes).some(p => p.id === id);
     }
 
+    // ============================================================
+    //  REGISTRAR PAQUETE (usa push)
+    // ============================================================
     async function registrarPaquete(id, nombre, celular, observaciones, ciudad, cantidad, frecuente, idEmpresa, nombreEmpresa, fotoBase64) {
         if (!id.trim()) { alert("El ID es obligatorio"); return false; }
         if (idExiste(id)) { alert("Ya existe un paquete con ese ID. Por favor usa otro."); return false; }
@@ -557,21 +697,22 @@
             qrBgColor: "#ffffff",
             logoBase64: null
         };
-        paquetes.push(nuevo);
         try {
-            await guardarDatos();
+            await agregarPaquete(nuevo);
             console.log('✅ Paquete registrado correctamente');
             return true;
         } catch (err) {
             console.error('❌ Error al guardar en Firebase:', err);
             alert('Error al guardar en Firebase: ' + err.message);
-            paquetes.pop();
             return false;
         }
     }
 
+    // ============================================================
+    //  EDITAR
+    // ============================================================
     function abrirEditor(id) {
-        const p = paquetes.find(p => p.id === id);
+        const p = Object.values(paquetes).find(p => p.id === id);
         if (!p) return;
         currentEditId = id;
         document.getElementById("editId").textContent = p.id;
@@ -589,7 +730,7 @@
 
     document.getElementById("btnGuardarEdicion").addEventListener("click", async function() {
         const id = currentEditId;
-        const p = paquetes.find(p => p.id === id);
+        const p = Object.values(paquetes).find(p => p.id === id);
         if (!p) return;
         const nombre = document.getElementById("editNombre").value.trim();
         if (!nombre) { alert("El nombre es obligatorio"); return; }
@@ -601,8 +742,17 @@
         p.idEmpresa = document.getElementById("editIdEmpresa").value.trim();
         p.nombreEmpresa = document.getElementById("editNombreEmpresa").value.trim();
         p.observaciones = document.getElementById("editObservaciones").value.trim();
+        // Encontrar la clave Firebase
+        let firebaseKey = null;
+        for (const [key, val] of Object.entries(paquetes)) {
+            if (val.id === id) {
+                firebaseKey = key;
+                break;
+            }
+        }
+        if (!firebaseKey) { alert("No se encontró el paquete en Firebase"); return; }
         try {
-            await guardarDatos();
+            await actualizarPaquete(firebaseKey, p);
             document.getElementById("modalEditar").style.display = "none";
         } catch (err) {
             alert("Error al guardar cambios: " + err.message);
@@ -610,32 +760,49 @@
     });
     document.getElementById("closeModalEditar").onclick = () => document.getElementById("modalEditar").style.display = "none";
 
+    // ============================================================
+    //  TOGGLE ENTREGADO
+    // ============================================================
     async function toggleEntregado(id) {
-        const p = paquetes.find(p => p.id === id);
-        if (p) {
-            p.entregado = !p.entregado;
-            try {
-                await guardarDatos();
-            } catch (err) {
-                alert("Error al actualizar: " + err.message);
-                p.entregado = !p.entregado;
+        const p = Object.values(paquetes).find(p => p.id === id);
+        if (!p) return;
+        p.entregado = !p.entregado;
+        let firebaseKey = null;
+        for (const [key, val] of Object.entries(paquetes)) {
+            if (val.id === id) {
+                firebaseKey = key;
+                break;
             }
+        }
+        if (!firebaseKey) { alert("No se encontró el paquete en Firebase"); return; }
+        try {
+            await actualizarPaquete(firebaseKey, { entregado: p.entregado });
+        } catch (err) {
+            alert("Error al actualizar: " + err.message);
+            p.entregado = !p.entregado; // revertir
         }
     }
 
     async function eliminarPaquete(id) {
         if (!confirm("¿Eliminar permanentemente?")) return;
-        const index = paquetes.findIndex(p => p.id === id);
-        if (index === -1) return;
-        const eliminado = paquetes.splice(index, 1)[0];
+        let firebaseKey = null;
+        for (const [key, val] of Object.entries(paquetes)) {
+            if (val.id === id) {
+                firebaseKey = key;
+                break;
+            }
+        }
+        if (!firebaseKey) { alert("No se encontró el paquete en Firebase"); return; }
         try {
-            await guardarDatos();
+            await eliminarPaqueteFirebase(firebaseKey);
         } catch (err) {
             alert("Error al eliminar: " + err.message);
-            paquetes.splice(index, 0, eliminado);
         }
     }
 
+    // ============================================================
+    //  WHATSAPP
+    // ============================================================
     function enviarWhatsApp(p) {
         let mensaje = "";
         const ciudad = p.ciudad || "LA PAZ";
@@ -728,6 +895,9 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
         }
     }
 
+    // ============================================================
+    //  FOTO
+    // ============================================================
     function verFoto(id, fotoBase64) {
         if (!fotoBase64) return;
         currentFotoId = id;
@@ -750,62 +920,16 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
     window.onclick = (e) => { if (e.target.classList.contains('modal')) e.target.style.display = "none"; };
 
     // ============================================================
-    //  RENDERIZAR
+    //  METRICAS
     // ============================================================
-    function getFiltrados() {
-        let filtrados = [...paquetes];
-        const texto = document.getElementById("filtroNombre").value.toLowerCase();
-        const estado = document.getElementById("filtroEstado").value;
-        if (texto) filtrados = filtrados.filter(p => p.nombre.toLowerCase().includes(texto) || p.id.toLowerCase().includes(texto));
-        if (estado !== "todos") {
-            if (estado === "entregado") filtrados = filtrados.filter(p => p.entregado);
-            else if (estado === "frecuentes") filtrados = filtrados.filter(p => p.clienteFrecuente === true);
-        }
-        return filtrados;
-    }
-
     function actualizarMetricas() {
-        document.getElementById("metricTotal").textContent = paquetes.length;
-        document.getElementById("metricEntregados").textContent = paquetes.filter(p => p.entregado).length;
+        const total = Object.keys(paquetes).length;
+        const entregados = Object.values(paquetes).filter(p => p.entregado).length;
         const hoy = hoyISO();
-        document.getElementById("metricHoy").textContent = paquetes.filter(p => p.fechaIngreso.split('T')[0] === hoy && !p.entregado).length;
-    }
-
-    function renderizarTodo() {
-        actualizarMetricas();
-        const filtrados = getFiltrados();
-        const tbody = document.getElementById("tbodyPaquetes");
-        tbody.innerHTML = "";
-        filtrados.forEach(p => {
-            let badgeText = p.entregado ? "Entregado" : "Verde";
-            let badgeClass = p.entregado ? "badge-gris" : "badge-verde";
-            const fotoHTML = p.fotoBase64 ? `<img src="${p.fotoBase64}" class="thumbnail" onclick="verFoto('${p.id}', '${p.fotoBase64}')">` : `<span class="icon-btn"><i class="fas fa-camera-slash"></i></span>`;
-            const entregadoCheck = `<input type="checkbox" ${p.entregado ? "checked" : ""} onchange="toggleEntregado('${p.id}')">`;
-            const frecuenteHTML = p.clienteFrecuente ? '<span class="badge badge-frecuente">⭐ Frecuente</span>' : 'No';
-            const fechaIngresoStr = p.fechaIngreso.split('T')[0];
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><strong>${p.id}</strong></td>
-                <td>${p.nombre}</td>
-                <td>${p.celular}</td>
-                <td>${p.ciudad || "LA PAZ"}</td>
-                <td>${p.cantidadPaquetes || 1}</td>
-                <td>${frecuenteHTML}</td>
-                <td>${p.idEmpresa || '—'}</td>
-                <td>${p.nombreEmpresa || '—'}</td>
-                <td>${fechaIngresoStr}</td>
-                <td><span class="badge ${badgeClass}">${badgeText}</span></td>
-                <td>${entregadoCheck}</td>
-                <td>${fotoHTML}</td>
-                <td><button class="icon-btn" onclick="mostrarQR(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fas fa-qrcode"></i></button></td>
-                <td><button class="icon-btn" onclick="enviarWhatsApp(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fab fa-whatsapp" style="color:#25d366;"></i></button></td>
-                <td>
-                    <button class="icon-btn" onclick="abrirEditor('${p.id}')"><i class="fas fa-edit"></i></button>
-                    <button class="icon-btn danger" onclick="eliminarPaquete('${p.id}')"><i class="fas fa-trash"></i></button>
-                </td>
-            `;
-            tbody.appendChild(row);
-        });
+        const hoyCount = Object.values(paquetes).filter(p => p.fechaIngreso && p.fechaIngreso.split('T')[0] === hoy && !p.entregado).length;
+        document.getElementById("metricTotal").textContent = total;
+        document.getElementById("metricEntregados").textContent = entregados;
+        document.getElementById("metricHoy").textContent = hoyCount;
     }
 
     // ============================================================
@@ -899,8 +1023,12 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
         renderizarTodo();
     });
 
+    // ============================================================
+    //  EXPORTAR / IMPORTAR (solo respaldo)
+    // ============================================================
     function exportarDatos() {
-        const blob = new Blob([JSON.stringify(paquetes, null, 2)], {type: "application/json"});
+        const data = Object.values(paquetes);
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `paquetes_backup_${hoyISO()}.json`;
@@ -915,8 +1043,7 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
             try {
                 const data = JSON.parse(e.target.result);
                 if (Array.isArray(data)) {
-                    paquetes = data;
-                    paquetes.forEach(p => {
+                    for (const p of data) {
                         if (!p.ciudad) p.ciudad = "LA PAZ";
                         if (p.clienteFrecuente === undefined) p.clienteFrecuente = false;
                         if (p.cantidadPaquetes === undefined) p.cantidadPaquetes = 1;
@@ -925,8 +1052,9 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
                         p.qrColor = "#000000";
                         p.qrBgColor = "#ffffff";
                         p.logoBase64 = null;
-                    });
-                    await guardarDatos();
+                        // Agregar usando push
+                        await agregarPaquete(p);
+                    }
                     alert("Datos importados correctamente");
                 } else alert("Formato inválido");
             } catch (err) { alert("Error al leer el archivo: " + err.message); }
@@ -979,16 +1107,12 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
     // ============================================================
     //  INICIO
     // ============================================================
-    cargarDatos()
-        .then(() => {
-            actualizarListaEmpresas();
-            renderizarTodo();
-            iniciarEscucha();
-        })
-        .catch(err => {
-            console.error("Error inicial:", err);
-            alert("No se pudo conectar con Firebase. Revisa la consola para más detalles.");
-        });
+    iniciarEscucha();
+
+    // Actualizar lista de empresas cuando cambien los datos (se llama desde el listener)
+    setInterval(() => {
+        actualizarListaEmpresas();
+    }, 5000); // cada 5 segundos para mantener actualizada la lista
 </script>
 </body>
 </html>
