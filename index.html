@@ -381,19 +381,22 @@
     //  FUNCIONES DE LECTURA/ESCRITURA
     // ============================================================
     async function guardarDatos() {
-        if (isSaving) return;
-        isSaving = true;
-        console.log('📤 Guardando en Firebase...', paquetes.length, 'paquetes');
-        try {
-            await database.ref('paquetes').set(paquetes);
-            console.log('✅ Guardado exitoso');
-        } catch (error) {
-            console.error('❌ Error al guardar:', error);
-            throw error;
-        } finally {
-            isSaving = false;
-        }
+    if (isSaving) return;
+    isSaving = true;
+    console.log('📤 Guardando en Firebase...', paquetes.length, 'paquetes');
+    try {
+        // Usamos set para sobrescribir toda la colección
+        await database.ref('paquetes').set(paquetes);
+        console.log('✅ Guardado exitoso');
+    } catch (error) {
+        console.error('❌ Error al guardar:', error);
+        // Mostrar el error en la interfaz
+        alert('Error al guardar en Firebase: ' + error.message);
+        throw error;
+    } finally {
+        isSaving = false;
     }
+}
 
     async function cargarDatos() {
         try {
