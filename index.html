@@ -64,7 +64,6 @@
             --input-bg: rgba(15,23,42,0.7);
             --input-border: #334155;
         }
-        /* resto de estilos (igual que antes) */
         .container { max-width: 1400px; margin: 0 auto; position: relative; z-index: 1; }
         .dashboard-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 25px; }
         h1 { font-size: 1.8rem; font-weight: 700; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; background-clip: text; color: transparent; display: inline-block; }
@@ -341,10 +340,10 @@
 
 <script>
     // ============================================================
-    //  🔥 CONFIGURACIÓN DE FIREBASE (¡REEMPLAZA CON TUS DATOS!)
+    //  🔥 CONFIGURACIÓN DE FIREBASE
     // ============================================================
     const firebaseConfig = {
-        apiKey: "AIzaSyDmZ9BUHPhjkOtXNNVdLuz46PDB_pcK5EU",          // 👈 REEMPLAZA
+        apiKey: "AIzaSyDmZ9BUHPhjkOtXNNVdLuz46PDB_pcK5EU",
         authDomain: "paqueteria-maxi.firebaseapp.com",
         databaseURL: "https://paqueteria-maxi-default-rtdb.firebaseio.com",
         projectId: "paqueteria-maxi",
@@ -353,12 +352,11 @@
         appId: "1:116496471170:web:91feacd0e518e9fbf7509b"
     };
 
-    // Inicializar Firebase
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
     // ============================================================
-    //  MODELO DE DATOS (global)
+    //  MODELO DE DATOS
     // ============================================================
     let paquetes = [];
     let currentEditId = null;
@@ -366,6 +364,7 @@
     let currentQRUrl = "";
     let currentFotoBase64 = "";
     let currentFotoId = "";
+    let isSaving = false; // Bandera para evitar sobrescritura durante guardado
 
     const UBICACION_URL_LA_PAZ = "https://maps.app.goo.gl/6fNSSSgyLRrF5fzG8?g_st=aw";
     const UBICACION_URL_EL_ALTO = "https://maps.app.goo.gl/mPxBRuaqP2NXSuQb7?g_st=aw";
@@ -379,27 +378,40 @@
     // ============================================================
     //  FUNCIONES DE LECTURA/ESCRITURA EN FIREBASE
     // ============================================================
-    function guardarDatos() {
-        return database.ref('paquetes').set(paquetes);
+    async function guardarDatos() {
+        if (isSaving) return;
+        isSaving = true;
+        console.log('📤 Guardando en Firebase...', paquetes.length, 'paquetes');
+        try {
+            await database.ref('paquetes').set(paquetes);
+            console.log('✅ Guardado exitoso');
+        } catch (error) {
+            console.error('❌ Error al guardar:', error);
+            throw error;
+        } finally {
+            isSaving = false;
+        }
     }
 
-    // Carga inicial (solo una vez)
-    function cargarDatos() {
-        return database.ref('paquetes').once('value').then(snapshot => {
+    // Carga inicial
+    async function cargarDatos() {
+        try {
+            const snapshot = await database.ref('paquetes').once('value');
             const data = snapshot.val();
             if (data) {
                 paquetes = data;
+                console.log('📥 Datos cargados desde Firebase:', paquetes.length);
             } else {
-                // Datos de ejemplo si no hay nada
+                console.log('📭 No hay datos en Firebase, se crearán ejemplos');
                 const ahora = new Date().toISOString();
                 paquetes = [
                     { id: "PAC-001", nombre: "Ana Lucía Pérez", celular: "+51987654321", observaciones: "Frágil", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "LA PAZ", clienteFrecuente: true, cantidadPaquetes: 3, idEmpresa: "EMP-001", nombreEmpresa: "Importadora Pérez" },
                     { id: "EMP-001-001", nombre: "Pedro Fernández", celular: "+59171234567", observaciones: "Cliente frecuente", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "EL ALTO", clienteFrecuente: true, cantidadPaquetes: 2, idEmpresa: "EMP-001", nombreEmpresa: "Importadora Pérez" },
                     { id: "PAC-003", nombre: "María Gómez", celular: "+56987654321", observaciones: "Urgente", fechaIngreso: ahora, entregado: false, fotoBase64: "", tokenQR: generarToken(), urlValidacion: "https://logi.app/v/" + generarToken(), qrColor: "#000000", qrBgColor: "#ffffff", logoBase64: null, ciudad: "LA PAZ", clienteFrecuente: false, cantidadPaquetes: 2, idEmpresa: "", nombreEmpresa: "" }
                 ];
-                return guardarDatos().then(() => paquetes);
+                await guardarDatos();
             }
-            // Migrar campos (por si faltan)
+            // Asegurar campos
             paquetes.forEach(p => {
                 if (!p.ciudad) p.ciudad = "LA PAZ";
                 if (p.clienteFrecuente === undefined) p.clienteFrecuente = false;
@@ -411,17 +423,25 @@
                 p.logoBase64 = null;
             });
             return paquetes;
-        });
+        } catch (error) {
+            console.error('❌ Error en cargarDatos:', error);
+            throw error;
+        }
     }
 
     // ============================================================
-    //  LISTENER EN TIEMPO REAL (solo para actualizar la vista)
+    //  LISTENER EN TIEMPO REAL (con bandera isSaving)
     // ============================================================
     function iniciarEscucha() {
         database.ref('paquetes').on('value', snapshot => {
+            if (isSaving) {
+                console.log('⏳ Ignorando actualización porque estamos guardando...');
+                return;
+            }
             const data = snapshot.val();
             if (data) {
                 paquetes = data;
+                console.log('🔄 Actualización en tiempo real:', paquetes.length);
                 // Asegurar campos
                 paquetes.forEach(p => {
                     if (!p.ciudad) p.ciudad = "LA PAZ";
@@ -440,7 +460,7 @@
     }
 
     // ============================================================
-    //  RESTO DE FUNCIONES (sin cambios significativos)
+    //  RESTO DE FUNCIONES
     // ============================================================
     function generarIdPaquete(idEmpresa) {
         if (!idEmpresa || idEmpresa.trim() === "") return "";
@@ -505,7 +525,7 @@
     }
 
     // ============================================================
-    //  REGISTRAR PAQUETE (con await para esperar la escritura)
+    //  REGISTRAR PAQUETE (con logs y manejo de errores)
     // ============================================================
     async function registrarPaquete(id, nombre, celular, observaciones, ciudad, cantidad, frecuente, idEmpresa, nombreEmpresa, fotoBase64) {
         // Validaciones
@@ -519,6 +539,7 @@
             return false;
         }
 
+        console.log('📦 Registrando paquete:', id);
         const ahora = new Date().toISOString();
         const token = generarToken();
         const urlValidacion = `https://logi.app/v/${token}`;
@@ -544,11 +565,12 @@
         paquetes.push(nuevo);
         try {
             await guardarDatos();
+            console.log('✅ Paquete registrado correctamente');
             return true;
         } catch (err) {
-            alert("Error al guardar en Firebase: " + err.message);
-            // Revertir el push local
-            paquetes.pop();
+            console.error('❌ Error al guardar en Firebase:', err);
+            alert('Error al guardar en Firebase: ' + err.message);
+            paquetes.pop(); // revertir
             return false;
         }
     }
@@ -607,8 +629,7 @@
                 await guardarDatos();
             } catch (err) {
                 alert("Error al actualizar: " + err.message);
-                // Revertir
-                p.entregado = !p.entregado;
+                p.entregado = !p.entregado; // revertir
             }
         }
     }
@@ -668,7 +689,6 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
             const container = document.getElementById("qrContainer");
             if (!container) { alert("Error: No se encontró el contenedor #qrContainer"); return; }
             container.innerHTML = "";
-
             const ciudad = paquete.ciudad || "LA PAZ";
             let url, direccion;
             if (ciudad === "EL ALTO") {
@@ -679,9 +699,7 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
                 direccion = DIRECCION_LA_PAZ;
             }
             currentQRUrl = url;
-
             document.getElementById("ubicacionLink").href = url;
-
             const data = `ID: ${paquete.id} - ${paquete.nombre} - ${url}`;
             const options = {
                 text: data,
@@ -694,7 +712,6 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
             };
             const qr = new QRCode(container, options);
             qrInstance = qr;
-
             document.getElementById("qrInfo").innerHTML = `
                 <strong>ID:</strong> ${paquete.id}<br>
                 <strong>Nombre:</strong> ${paquete.nombre}<br>
@@ -779,12 +796,10 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
         filtrados.forEach(p => {
             let badgeText = p.entregado ? "Entregado" : "Verde";
             let badgeClass = p.entregado ? "badge-gris" : "badge-verde";
-
             const fotoHTML = p.fotoBase64 ? `<img src="${p.fotoBase64}" class="thumbnail" onclick="verFoto('${p.id}', '${p.fotoBase64}')">` : `<span class="icon-btn"><i class="fas fa-camera-slash"></i></span>`;
             const entregadoCheck = `<input type="checkbox" ${p.entregado ? "checked" : ""} onchange="toggleEntregado('${p.id}')">`;
             const frecuenteHTML = p.clienteFrecuente ? '<span class="badge badge-frecuente">⭐ Frecuente</span>' : 'No';
             const fechaIngresoStr = p.fechaIngreso.split('T')[0];
-
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td><strong>${p.id}</strong></td>
@@ -945,11 +960,10 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
     }
 
     // ============================================================
-    //  MODO OSCURO (con DOMContentLoaded para asegurar)
+    //  MODO OSCURO
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
         const themeToggle = document.getElementById("themeToggle");
-        // Restaurar estado
         if (localStorage.getItem("darkMode") === "true") {
             document.body.classList.add("dark");
             themeToggle.innerHTML = '<i class="fas fa-sun"></i> Modo claro';
@@ -996,7 +1010,7 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
         .then(() => {
             actualizarListaEmpresas();
             renderizarTodo();
-            iniciarEscucha();  // Escucha en tiempo real después de la carga inicial
+            iniciarEscucha();
         })
         .catch(err => {
             console.error("Error inicial:", err);
