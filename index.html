@@ -340,7 +340,7 @@
 
 <script>
     // ============================================================
-    //  🔥 CONFIGURACIÓN DE FIREBASE
+    //  🔥 CONFIGURACIÓN DE FIREBASE (¡REEMPLAZA CON TUS DATOS!)
     // ============================================================
     const firebaseConfig = {
         apiKey: "AIzaSyDmZ9BUHPhjkOtXNNVdLuz46PDB_pcK5EU",
@@ -350,9 +350,10 @@
         storageBucket: "paqueteria-maxi.firebasestorage.app",
         messagingSenderId: "116496471170",
         appId: "1:116496471170:web:91feacd0e518e9fbf7509b"
-        measurementId: "G-24BVHCJCQH"
+        // No incluyas 'measurementId' a menos que lo tengas
     };
 
+    // Inicializar Firebase
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
@@ -365,7 +366,7 @@
     let currentQRUrl = "";
     let currentFotoBase64 = "";
     let currentFotoId = "";
-    let isSaving = false; // Bandera para evitar sobrescritura durante guardado
+    let isSaving = false;
 
     const UBICACION_URL_LA_PAZ = "https://maps.app.goo.gl/6fNSSSgyLRrF5fzG8?g_st=aw";
     const UBICACION_URL_EL_ALTO = "https://maps.app.goo.gl/mPxBRuaqP2NXSuQb7?g_st=aw";
@@ -377,7 +378,7 @@
     function hoyISO() { return new Date().toISOString().split('T')[0]; }
 
     // ============================================================
-    //  FUNCIONES DE LECTURA/ESCRITURA EN FIREBASE
+    //  FUNCIONES DE LECTURA/ESCRITURA
     // ============================================================
     async function guardarDatos() {
         if (isSaving) return;
@@ -394,7 +395,6 @@
         }
     }
 
-    // Carga inicial
     async function cargarDatos() {
         try {
             const snapshot = await database.ref('paquetes').once('value');
@@ -412,7 +412,6 @@
                 ];
                 await guardarDatos();
             }
-            // Asegurar campos
             paquetes.forEach(p => {
                 if (!p.ciudad) p.ciudad = "LA PAZ";
                 if (p.clienteFrecuente === undefined) p.clienteFrecuente = false;
@@ -430,9 +429,6 @@
         }
     }
 
-    // ============================================================
-    //  LISTENER EN TIEMPO REAL (con bandera isSaving)
-    // ============================================================
     function iniciarEscucha() {
         database.ref('paquetes').on('value', snapshot => {
             if (isSaving) {
@@ -443,7 +439,6 @@
             if (data) {
                 paquetes = data;
                 console.log('🔄 Actualización en tiempo real:', paquetes.length);
-                // Asegurar campos
                 paquetes.forEach(p => {
                     if (!p.ciudad) p.ciudad = "LA PAZ";
                     if (p.clienteFrecuente === undefined) p.clienteFrecuente = false;
@@ -461,7 +456,7 @@
     }
 
     // ============================================================
-    //  RESTO DE FUNCIONES
+    //  RESTO DE FUNCIONES (sin cambios, solo las que usan guardarDatos)
     // ============================================================
     function generarIdPaquete(idEmpresa) {
         if (!idEmpresa || idEmpresa.trim() === "") return "";
@@ -525,11 +520,7 @@
         return paquetes.some(p => p.id === id);
     }
 
-    // ============================================================
-    //  REGISTRAR PAQUETE (con logs y manejo de errores)
-    // ============================================================
     async function registrarPaquete(id, nombre, celular, observaciones, ciudad, cantidad, frecuente, idEmpresa, nombreEmpresa, fotoBase64) {
-        // Validaciones
         if (!id.trim()) { alert("El ID es obligatorio"); return false; }
         if (idExiste(id)) { alert("Ya existe un paquete con ese ID. Por favor usa otro."); return false; }
         if (!nombre.trim()) { alert("El nombre es obligatorio"); return false; }
@@ -571,14 +562,11 @@
         } catch (err) {
             console.error('❌ Error al guardar en Firebase:', err);
             alert('Error al guardar en Firebase: ' + err.message);
-            paquetes.pop(); // revertir
+            paquetes.pop();
             return false;
         }
     }
 
-    // ============================================================
-    //  EDITAR
-    // ============================================================
     function abrirEditor(id) {
         const p = paquetes.find(p => p.id === id);
         if (!p) return;
@@ -619,9 +607,6 @@
     });
     document.getElementById("closeModalEditar").onclick = () => document.getElementById("modalEditar").style.display = "none";
 
-    // ============================================================
-    //  TOGGLE ENTREGADO
-    // ============================================================
     async function toggleEntregado(id) {
         const p = paquetes.find(p => p.id === id);
         if (p) {
@@ -630,7 +615,7 @@
                 await guardarDatos();
             } catch (err) {
                 alert("Error al actualizar: " + err.message);
-                p.entregado = !p.entregado; // revertir
+                p.entregado = !p.entregado;
             }
         }
     }
@@ -644,13 +629,10 @@
             await guardarDatos();
         } catch (err) {
             alert("Error al eliminar: " + err.message);
-            paquetes.splice(index, 0, eliminado); // revertir
+            paquetes.splice(index, 0, eliminado);
         }
     }
 
-    // ============================================================
-    //  WHATSAPP
-    // ============================================================
     function enviarWhatsApp(p) {
         let mensaje = "";
         const ciudad = p.ciudad || "LA PAZ";
@@ -743,9 +725,6 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
         }
     }
 
-    // ============================================================
-    //  FOTO
-    // ============================================================
     function verFoto(id, fotoBase64) {
         if (!fotoBase64) return;
         currentFotoId = id;
@@ -892,7 +871,6 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
 
         const exito = await registrarPaquete(id, nombre, celular, observaciones, ciudad, cantidad, frecuente, idEmpresa, nombreEmpresa, currentFotoBase64Upload);
         if (exito) {
-            // Limpiar formulario solo si se guardó correctamente
             document.getElementById("idPaquete").value = "";
             document.getElementById("nombreCliente").value = "";
             document.getElementById("celular").value = "";
@@ -910,9 +888,6 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
         }
     });
 
-    // ============================================================
-    //  FILTROS
-    // ============================================================
     document.getElementById("filtroNombre").addEventListener("input", renderizarTodo);
     document.getElementById("filtroEstado").addEventListener("change", renderizarTodo);
     document.getElementById("resetFiltros").addEventListener("click", function() {
@@ -921,9 +896,6 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
         renderizarTodo();
     });
 
-    // ============================================================
-    //  EXPORTAR / IMPORTAR (solo respaldo)
-    // ============================================================
     function exportarDatos() {
         const blob = new Blob([JSON.stringify(paquetes, null, 2)], {type: "application/json"});
         const link = document.createElement('a');
@@ -977,9 +949,6 @@ Por favor, recuerde traer su documento de identidad. ¡Lo esperamos!`;
         });
     });
 
-    // ============================================================
-    //  FAB (botón flotante) para móvil
-    // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
         const fabToggle = document.getElementById('fabToggle');
         const fabMenu = document.getElementById('fabMenu');
